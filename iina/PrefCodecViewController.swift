@@ -9,11 +9,11 @@
 import Cocoa
 
 class PrefCodecViewController: NSViewController {
-  
+
   override var nibName: String? {
     return "PrefCodecViewController"
   }
-  
+
   override var identifier: String? {
     get {
       return "codec"
@@ -22,18 +22,39 @@ class PrefCodecViewController: NSViewController {
       super.identifier = newValue
     }
   }
-  
+
   var toolbarItemImage: NSImage {
     return NSImage(named: "toolbar_codec")!
   }
-  
+
   var toolbarItemLabel: String {
-    return "Codec"
+    view.layoutSubtreeIfNeeded()
+    return NSLocalizedString("preference.codec", comment: "Codec")
   }
+
+  var hasResizableWidth: Bool = false
+  var hasResizableHeight: Bool = false
+
+  @IBOutlet weak var spdifAC3Btn: NSButton!
+  @IBOutlet weak var spdifDTSBtn: NSButton!
+  @IBOutlet weak var spdifDTSHDBtn: NSButton!
+
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    // Do view setup here.
+
+    let spdif = (PlayerCore.shared.mpvController.getString(MPVOption.Audio.audioSpdif) ?? "").components(separatedBy: ",")
+    spdifAC3Btn.state = spdif.contains("ac3") ? NSOnState : NSOffState
+    spdifDTSBtn.state = spdif.contains("dts") ? NSOnState : NSOffState
+    spdifDTSHDBtn.state = spdif.contains("dts-hd") ? NSOnState : NSOffState
   }
-    
+
+  @IBAction func spdifBtnAction(_ sender: AnyObject) {
+    var spdif: [String] = []
+    if spdifAC3Btn.state == NSOnState { spdif.append("ac3") }
+    if spdifDTSBtn.state == NSOnState { spdif.append("dts") }
+    if spdifDTSHDBtn.state == NSOnState { spdif.append("dts-hd") }
+    PlayerCore.shared.mpvController.setString(MPVOption.Audio.audioSpdif, spdif.joined(separator: ","))
+  }
+
 }

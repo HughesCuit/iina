@@ -11,29 +11,29 @@ import MASPreferences
 
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
-  
+
   var isReady: Bool = false
-  
+
   lazy var playerCore: PlayerCore = PlayerCore.shared
-  
+
   lazy var aboutWindow: AboutWindowController = AboutWindowController()
-  
+
   lazy var fontPicker: FontPickerWindowController = FontPickerWindowController()
-  
+
   lazy var inspector: InspectorWindowController = InspectorWindowController()
-  
+
   lazy var vfWindow: FilterWindowController = {
     let w = FilterWindowController()
     w.filterType = MPVProperty.vf
     return w
   }()
-  
+
   lazy var afWindow: FilterWindowController = {
     let w = FilterWindowController()
     w.filterType = MPVProperty.af
     return w
   }()
-  
+
   lazy var preferenceWindowController: NSWindowController = {
     return MASPreferencesWindowController(viewControllers: [
       PrefGeneralViewController(),
@@ -44,11 +44,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       PrefControlViewController(),
       PrefKeyBindingViewController(),
       PrefAdvancedViewController(),
-    ], title: "Preference")
+    ], title: NSLocalizedString("preference.title", comment: "Preference"))
   }()
-  
+
   @IBOutlet weak var menuController: MenuController!
-  
+
   @IBOutlet weak var dockMenu: NSMenu!
 
   func applicationDidFinishLaunching(_ aNotification: Notification) {
@@ -57,26 +57,51 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       playerCore.startMPV()
       menuController.bindMenuItems()
       isReady = true
+
+      if UserDefaults.standard.bool(forKey: Preference.Key.openStartPanel) {
+        // invoke after 0.5s
+        Timer.scheduledTimer(timeInterval: TimeInterval(0.5), target: self, selector: #selector(self.openFile(_:)), userInfo: nil, repeats: false)
+      }
     }
+    // show alpha in color panels
+    NSColorPanel.shared().showsAlpha = true
+
+    // other
+    if #available(OSX 10.12.2, *) {
+      NSApp.isAutomaticCustomizeTouchBarMenuItemEnabled = false
+      NSWindow.allowsAutomaticWindowTabbing = false
+    }
+
+    // check update
+    UpdateChecker.checkUpdate(alertIfOfflineOrNoUpdate: false)
   }
 
   func applicationWillTerminate(_ aNotification: Notification) {
     // Insert code here to tear down your application
   }
-  
+
   func applicationDidResignActive(_ notification: Notification) {
 
   }
-  
+
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    guard playerCore.mainWindow.isWindowLoaded else { return false }
     return UserDefaults.standard.bool(forKey: Preference.Key.quitWhenNoOpenedWindow)
   }
-  
+
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplicationTerminateReply {
     playerCore.terminateMPV()
     return .terminateNow
   }
-  
+
+  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows
+    flag: Bool) -> Bool {
+    if !flag && UserDefaults.standard.bool(forKey: Preference.Key.openStartPanel) {
+      self.openFile(sender)
+    }
+    return true
+  }
+
   func application(_ sender: NSApplication, openFile filename: String) -> Bool {
     if !isReady {
       UserDefaults.standard.register(defaults: Preference.defaultPreference)
@@ -84,19 +109,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       menuController.bindMenuItems()
       isReady = true
     }
-    playerCore.openFile(URL(fileURLWithPath: filename))
+
+    let url = URL(fileURLWithPath: filename)
+    if playerCore.ud.bool(forKey: Preference.Key.recordRecentFiles) {
+      NSDocumentController.shared().noteNewRecentDocumentURL(url)
+    }
+    playerCore.openFile(url)
     return true
   }
-  
+
   // MARK: - Dock menu
-  
+
   func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
     return dockMenu
   }
-  
+
   // MARK: - Menu actions
-  
-  @IBAction func openFile(_ sender: NSMenuItem) {
+
+  @IBAction func openFile(_ sender: AnyObject) {
     let panel = NSOpenPanel()
     panel.title = "Choose media file"
     panel.canCreateDirectories = false
@@ -113,46 +143,57 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       }
     }
   }
-  
+
   @IBAction func openURL(_ sender: NSMenuItem) {
     let _ = Utility.quickPromptPanel(messageText: "Open URL", informativeText: "Please enter the url:") { str in
       playerCore.openURLString(str)
     }
   }
-  
+
   @IBAction func menuOpenScreenshotFolder(_ sender: NSMenuItem) {
     let screenshotPath = UserDefaults.standard.string(forKey: Preference.Key.screenshotFolder)!
     let absoluteScreenshotPath = NSString(string: screenshotPath).expandingTildeInPath
     let url = URL(fileURLWithPath: absoluteScreenshotPath, isDirectory: true)
       NSWorkspace.shared().open(url)
   }
-  
+
+  @IBAction func menuSelectAudioDevice(_ sender: NSMenuItem) {
+    if let name = sender.representedObject as? String {
+      PlayerCore.shared.setAudioDevice(name)
+    }
+  }
+
   @IBAction func showPreferences(_ sender: AnyObject) {
     preferenceWindowController.showWindow(self)
   }
-  
+
   @IBAction func showVideoFilterWindow(_ sender: AnyObject) {
     vfWindow.showWindow(self)
   }
-  
+
   @IBAction func showAudioFilterWindow(_ sender: AnyObject) {
     afWindow.showWindow(self)
   }
-  
+
   @IBAction func showAboutWindow(_ sender: AnyObject) {
     aboutWindow.showWindow(self)
   }
-  
+
   @IBAction func helpAction(_ sender: AnyObject) {
     NSWorkspace.shared().open(URL(string: AppData.websiteLink)!.appendingPathComponent("documentation"))
   }
-  
+
   @IBAction func githubAction(_ sender: AnyObject) {
     NSWorkspace.shared().open(URL(string: AppData.githubLink)!)
   }
-  
+
   @IBAction func websiteAction(_ sender: AnyObject) {
     NSWorkspace.shared().open(URL(string: AppData.websiteLink)!)
   }
-  
+
+  @IBAction func checkUpdate(_ sender: AnyObject) {
+    UpdateChecker.checkUpdate()
+  }
+
+
 }
